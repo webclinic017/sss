@@ -1,89 +1,130 @@
+#############################################################################
+#
+# Version 0.1.35 - Author: Asaf Ravid <asaf.rvd@gmail.com>
+#
+#    Stock Screener and Scanner - based on yfinance
+#    Copyright (C) 2021 Asaf Ravid
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#############################################################################
+
 import sss_filenames
 import csv
 import os
 
-NEWER_DATE_AND_TIME = "Results/20201014-074613_TASE"
-OLDER_DATE_AND_TIME = "Results/20201008-233737_TASE"
-TICKER_INDEX        = 0
-NAME_INDEX          = 1
-MOVEMENT_THRESHOLD  = 3 # Alert only for tickers which have moved more than a certain amount of positions
 
-older_filenames_list = sss_filenames.create_filenames_list(OLDER_DATE_AND_TIME)
-newer_filenames_list = sss_filenames.create_filenames_list(NEWER_DATE_AND_TIME)
-diff_filenames_list  = sss_filenames.create_filenames_list('Results/diff'+'_new'+NEWER_DATE_AND_TIME.replace('Results/','_')+'_old'+OLDER_DATE_AND_TIME.replace('Results/','_'))
-
-
-if len(older_filenames_list) != len(newer_filenames_list):
-    raise Exception("Different Lengths of lists - Unacceptable")
-
-
-def get_row_index(ticker, rows):
+def get_row_index(symbol_index, symbol, rows):
     index = 0
     for row in rows:
-        if ticker == row[TICKER_INDEX]:
-            return index
+        if symbol == row[symbol_index]:
+            return index+1 # avoid row index 0
         index += 1
     return -1
 
 
-for index in range(len(newer_filenames_list)):
-    output_csv_rows = [['ticker','change','from','to']]  #,'sss_value', 'ssss_value', 'sssss_value', 'ssse_value', 'sssse_value', 'ssssse_value', 'sssi_value', 'ssssi_value', 'sssssi_value', 'sssei_value', 'ssssei_value', 'sssssei_value', 'enterprise_value_to_revenue', 'trailing_price_to_earnings', 'enterprise_value_to_ebitda', 'profit_margin', 'held_percent_institutions', 'forward_eps', 'trailing_eps', 'price_to_book', 'shares_outstanding', 'net_income_to_common_shareholders', 'nitcsh_to_shares_outstanding', 'num_employees', 'nitcsh_to_num_employees', 'earnings_quarterly_growth', 'price_to_earnings_to_growth_ratio']]
-    print("\n{:20}:\n==========================================================".format(newer_filenames_list[index]))
+def run(newer_path, older_path, db_exists_in_both_folders, diff_only_result, movement_threshold, res_length, consider_as_new_from):
+    newer_filenames_list = sss_filenames.create_filenames_list(newer_path)
+    older_filenames_list = sss_filenames.create_filenames_list(older_path)
+    diff_path = 'Results/Diff/'+'new'+newer_path.replace('Results','_').replace('/','').replace('nRes','')+'_old'+older_path.replace('Results','_').replace('/','').replace('Tase','').replace('Nsr','').replace('All','').replace('nRes','').replace('a','').replace('e','').replace('i','').replace('o','').replace('u','')
+    compact_diff_path = diff_path.replace('FavorTechBy3','FTB3').replace('MCap_','').replace('BuildDb_','').replace('nResults','')
+    diff_filenames_list  = sss_filenames.create_filenames_list(compact_diff_path)
+    newer_filenames_list.insert(  0, newer_path +'/results_sss.csv')
+    older_filenames_list.insert(  0, older_path +'/results_sss.csv')
 
-    # 1st, Read the Older File, which will be the reference:
-    older_rows = []
-    with open(older_filenames_list[index], mode='r', newline='') as engine:
-        reader = csv.reader(engine, delimiter=',')
-        row_index = 0
-        for row in reader:
-            if row_index == 0:
-                row_index += 1
-                continue
-            else:
-                older_rows.append(row)
-                row_index += 1
+    diff_filenames_list.insert(  0,'{}/res_sss.csv'.format(  compact_diff_path))
 
-    # 2nd, read the Newer File and check if (and where) each line appears in the Older file (if at all)
-    newer_rows = []
-    with open(newer_filenames_list[index], mode='r', newline='') as engine:
-        reader = csv.reader(engine, delimiter=',')
-        row_index = 0
-        for row in reader:
-            if row_index == 0:
-                row_index += 1
-                continue
-            else:
-                newer_rows.append(row)
-                ticker = row[TICKER_INDEX]
-                name   = row[NAME_INDEX]
-                row_index_in_older_file = get_row_index(ticker, older_rows)
-                oldr = older_rows[row_index_in_older_file]
-                if row_index_in_older_file >= 0:
-                    if abs(row_index_in_older_file - (row_index-1)) > MOVEMENT_THRESHOLD:
-                        print("{:10} ({:30}):  {:2} positions change from {:3} to {:3}".format(ticker, name, row_index_in_older_file-(row_index-1), row_index_in_older_file, (row_index-1)))
-                        print('                                                                                    From            sss_value: {:15}, ssss_value: {:15}, sssss_value: {:15}, ssse_value: {:15}, sssse_value: {:15}, ssssse_value: {:15}, sssi_value: {:15}, ssssi_value: {:15}, sssssi_value: {:15}, sssei_value: {:15}, ssssei_value: {:15}, sssssei_value: {:15}, enterprise_value_to_revenue: {:15}, trailing_price_to_earnings: {:15}, enterprise_value_to_ebitda: {:15}, profit_margin: {:15}, held_percent_institutions: {:15}, forward_eps: {:15}, trailing_eps: {:15}, price_to_book: {:15}, shares_outstanding: {:15}, net_income_to_common_shareholders: {:15}, nitcsh_to_shares_outstanding: {:15}, num_employees: {:15}, nitcsh_to_num_employees: {:15}, earnings_quarterly_growth: {:15}, price_to_earnings_to_growth_ratio: {:15}'.format(
-                                                                                                                                   oldr[3],          oldr[4],           oldr[5],            oldr[6],           oldr[7],            oldr[8],             oldr[9],           oldr[10],           oldr[11],            oldr[12],           oldr[13],            oldr[14],             oldr[15],                           oldr[16],                          oldr[17],                          oldr[18],             oldr[19],                         oldr[20],           oldr[21],            oldr[22],             oldr[23],                  oldr[24],                                 oldr[25],                            oldr[26],             oldr[27],                       oldr[28],                         oldr[29],                          ))
-                        print('                                                                                    To              sss_value: {:15}, ssss_value: {:15}, sssss_value: {:15}, ssse_value: {:15}, sssse_value: {:15}, ssssse_value: {:15}, sssi_value: {:15}, ssssi_value: {:15}, sssssi_value: {:15}, sssei_value: {:15}, ssssei_value: {:15}, sssssei_value: {:15}, enterprise_value_to_revenue: {:15}, trailing_price_to_earnings: {:15}, enterprise_value_to_ebitda: {:15}, profit_margin: {:15}, held_percent_institutions: {:15}, forward_eps: {:15}, trailing_eps: {:15}, price_to_book: {:15}, shares_outstanding: {:15}, net_income_to_common_shareholders: {:15}, nitcsh_to_shares_outstanding: {:15}, num_employees: {:15}, nitcsh_to_num_employees: {:15}, earnings_quarterly_growth: {:15}, price_to_earnings_to_growth_ratio: {:15}'.format(
-                                                                                                                                   row[3],           row[4],            row[5],             row[6],            row[7],             row[8],              row[9],            row[10],            row[11],             row[12],            row[13],             row[14],              row[15],                            row[16],                           row[17],                           row[18],              row[19],                          row[20],            row[21],             row[22],              row[23],                   row[24],                                  row[25],                             row[26],              row[27],                        row[28],                          row[29],                          ))
+    if len(older_filenames_list) != len(newer_filenames_list):
+        raise Exception("Different Lengths of lists - Unacceptable")
 
-                        output_csv_rows.append([ticker, row_index_in_older_file-(row_index-1), row_index_in_older_file, (row_index-1)])
+    diff_lists = [[]]  # index 0: sss
+
+    if diff_only_result: length_to_iterate = 1 # Only SSS 3  # SSS, SSSS and SSSSS
+    else:                length_to_iterate = len(newer_filenames_list)
+    for index in range(length_to_iterate):
+        if db_exists_in_both_folders == 0 and index == 0: continue
+        output_csv_rows = [['symbol','change','from','to']]
+        print("\n{:20}:\n======================================".format(newer_filenames_list[index]))
+
+        # 1st, Read the Older File, which will be the reference:
+        older_rows = []
+        with open(older_filenames_list[index], mode='r', newline='') as engine:
+            reader = csv.reader(engine, delimiter=',')
+            row_index = 0
+            for row in reader:
+                if row_index == 0:
+                    row_index += 1
+                    continue
                 else:
-                    print("ticker {:10}: appears at position {:2} (new)".format(ticker, row_index-1))
-                    output_csv_rows.append([ticker, 'new', 'new', (row_index - 1)])
-                row_index += 1
+                    older_rows.append(row)
+                    if row_index >= res_length: break
+                    row_index += 1
 
-    # 3rd, scan for Older File rows which do not appear in the Newer files anymore:
-    row_index = 0
-    for row in older_rows:
-        ticker = row[TICKER_INDEX]
-        row_index_in_newer_file = get_row_index(ticker, newer_rows)
-        if row_index_in_newer_file < 0:
-            print("ticker {:10}: disappeared from position {:2} (removed)".format(ticker, row_index))
-            output_csv_rows.append([ticker, 'removed', row_index, 'removed'])
-        row_index += 1
-    # Write results to CSV (if any changes detected):
-    if len(output_csv_rows) > 1:
-        os.makedirs(os.path.dirname(diff_filenames_list[index]), exist_ok=True)
-        with open(diff_filenames_list[index], mode='w', newline='') as engine:
-            writer = csv.writer(engine)
-            writer.writerows(output_csv_rows)
+        # 2nd, read the Newer File and check if (and where) each line appears in the Older file (if at all)
+        newer_rows = []
+        with open(newer_filenames_list[index], mode='r', newline='') as engine:
+            reader = csv.reader(engine, delimiter=',')
+            row_index = 0
+            for row in reader:
+                if row_index == 0:
+                    diff_lists[index].append('Diff')
+                    symbol_index = row.index("Symbol")
+                    name_index   = row.index("Name")
+                    if   "sss_index"   in row: sss_index = row.index("sss_value")
+
+                    row_index += 1
+                    continue
+                else:
+                    newer_rows.append(row)
+                    symbol = row[symbol_index]
+                    name   = row[name_index]
+                    row_in_older_file = get_row_index(symbol_index, symbol, older_rows)
+                    oldr = older_rows[row_in_older_file-1]  # -1 converts from row to row_index
+                    if row_in_older_file >= 0:  # This stock in the new list, appears in the old list as well
+                        if abs(row_in_older_file - row_index) > movement_threshold:
+                            print("{:5} ({:15}):  {:2} positions change from {:3} to {:3}".format(symbol, name, row_in_older_file-row_index, row_in_older_file, row_index))
+                            output_csv_rows.append([symbol, row_in_older_file-row_index, row_in_older_file, row_index])
+
+                        if row_in_older_file > consider_as_new_from >= row_index:
+                            diff_lists[index].append('new+{}'.format(row_in_older_file-row_index))
+                        elif row_in_older_file == row_index:
+                            diff_lists[index].append('0')
+                        elif row_in_older_file > row_index:
+                            diff_lists[index].append('+{}'.format(row_in_older_file-row_index))  # old row - this row = row change (up+ or down-)
+                        else:
+                            diff_lists[index].append('{}'.format( row_in_older_file-row_index))  # old row - this row = row change (+up or -down)
+                    else:
+                        print("{:5}: appears at position {:2} (new)".format(symbol, row_index))
+                        output_csv_rows.append([symbol, 'new', 'new', row_index])
+                        diff_lists[index].append('new')
+
+                    if row_index >= res_length: break
+                    row_index += 1
+
+        # 3rd, scan for Older File rows which do not appear in the Newer files anymore:
+        row_index = 0
+        for row in older_rows:
+            symbol = row[symbol_index]
+            row_index_in_newer_file = get_row_index(symbol_index, symbol, newer_rows)
+            if row_index_in_newer_file < 0:
+                print("{:5}: disappeared from position {:2} (removed)".format(symbol, row_index))
+                output_csv_rows.append([symbol, 'removed', row_index, 'removed'])
+            row_index += 1
+        # Write results to CSV (if any changes detected):
+        if len(output_csv_rows) > 1:
+            os.makedirs(os.path.dirname(diff_filenames_list[index]), exist_ok=True)
+            with open(diff_filenames_list[index], mode='w', newline='') as engine:
+                writer = csv.writer(engine)
+                writer.writerows(output_csv_rows)
+    return diff_lists
