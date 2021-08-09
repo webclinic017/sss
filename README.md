@@ -1,55 +1,55 @@
-# SSS Overview
+# Overview
  Stock Scanner & Screener: A `yfinance`-based Stock Scanner & Screener for the Israeli and US Stock Markets (Extendable to other stock markets as well). Within the code, the following libraries and fonts are used:
- - https://pypi.org/project/yfinance/
- - https://pypi.org/project/fpdf/
- - https://pypi.org/project/pandas/
- - https://pypi.org/project/forex-python/
- - https://pypi.org/project/CurrencyConverter/
- - https://pypi.org/project/py-currency-converter/
- - https://pypi.org/project/PyCurrency-Converter/
- - https://pypi.org/project/currency.converter/
- - https://fonts2u.com/dejavu-sans-condensed.font
+ - Mandatory Python Libraries:
+   - https://pypi.org/project/yfinance/
+   - https://pypi.org/project/fpdf/
+   - https://pypi.org/project/pandas/
+ - Reccomended Python Libraries (Backup Internal independent Forex Tables are partially maintained):
+   - https://pypi.org/project/forex-python/
+   - https://pypi.org/project/CurrencyConverter/
+   - https://pypi.org/project/py-currency-converter/
+   - https://pypi.org/project/PyCurrency-Converter/
+   - https://pypi.org/project/currency.converter/
+ - Fonts:
+   - https://fonts2u.com/dejavu-sans-condensed.font
 
 The stocks scan and sorting is done according to the below documentation (Core Equation and Multi-Dimensional scan) written using Google Documents (https://www.google.com/docs/about/):
 
-# SSS Core Equation
+# Core Equation
 http://bit.ly/SssCoreEquation
 
-# SSS Muti-Dimensional Scan and Ranking Equation
+# Muti-Dimensional Scan and Ranking Equation
 https://bit.ly/MultiDimensionalScan
 
 # Setup
-- Install `Python 3.8` or higher from https://www.python.org/downloads/
-- Install `Pycharm Community Edition` from https://www.jetbrains.com/pycharm/download/
+- Install `Python 3.6` or higher from https://www.python.org/downloads/
+- (Reccomended but Optional) Install `Pycharm Community Edition` from https://www.jetbrains.com/pycharm/download/
 - Download the `SSS` source code as a Zip file from this page (https://github.com/asafravid/sss/archive/master.zip) or clone/fork the repository directly
 - Open Project from folder (to which you unzipped the `sss` source code)
 - No further steps required apart from `pip[3]` installing relevant libraries:
-  - `cd <[path to]Python 3.8>`
-  - `pip[3] install pandas`
-  - `pip[3] install yfinance`
-  - `pip[3] install fpdf`
-  - `pip[3] install forex_python` and/or `pip[3] install forex-ython`
-  - `pip[3] install numpy`
-  - `pip[3] install CurrencyConverter`
-  - `pip[3] install PyCurrency-Converter`
-  - `pip[3] install currency.converter`
-- Note that for `yfinance` - I may be providing updated sources since they take time to update by the developers, so `pip3 install yfinance` from the origin, and then update (using comparison SW) the necessary changes I made (not too many) to run the `SSS` most efficiently and informatively.
+  - Mandatory
+    - `pip[3] install pandas`
+    - `pip[3] install yfinance`
+    - `pip[3] install fpdf`
+    - `pip[3] install numpy`
+    - `pip[3] install forex_python` and/or `pip[3] install forex-python`
+    - `pip[3] install CurrencyConverter`
+    - `pip[3] install PyCurrency-Converter`
+    - `pip[3] install currency.converter`
   
 # Run Step-By-Step Instructions
-- 1: Set the required scanning mode (`custom`/`tase`/`nsr`/`all`) in `sss_run.py` and run `sss_run.py`
-- 2: A Results folder shall be created under `Results` Folder
-- 3: Feed the Results path into the `research_mode` (Multi-Dimensional Scan). A `PDF` and `sss_results.csv` files shall be created in the same folder
+- 1: Set the required scanning mode(s) (`custom`/`tase`/`nsr`/`all`) in `sss_run.py` and run `sss_run.py`
+- 2: A Results folder shall be created under `Results/<mode>/` Folder
+- 3: Feed the Results path into the `research_mode` (Multi-Dimensional Scan). A `PDF` and `sss_results_*.csv` files shall be created in the same folder
 
 # Indices Maintenance
 - Download `TASE` latest components via https://info.tase.co.il/eng/MarketData/Stocks/MarketData/Pages/MarketData.aspx into `Indices/Data_TASE.csv` -> This operation is done automatically upon each scan (with `research_mode = False`) via `sss_indices.py`
 - Download `NASDAQ100` latest components via https://www.nasdaq.com/market-activity/quotes/nasdaq-ndx-index into `Indices/nasdaq100-components.csv`
 - Download `Russel1000` latest components via https://en.wikipedia.org/wiki/Russell_1000_Index into `russell-1000-index.csv` 
 - Download `S&P500` latest components into `Indices/snp500-components.csv`  (Remove last line indicating creation date)
-- Download `NASDAQ` latest components via `ftp://ftp.nasdaqtrader.com/symboldirectory/` into `Indices/nasdaqlisted.csv` (Convert `.txt` to `.csv` and remove last line indicating creation date) using an FTP Client (such as https://filezilla-project.org/)
-- Download `NASDAQ` Other Listed components via `ftp://ftp.nasdaqtrader.com/symboldirectory/` into `Indices/otherlisted.csv` (Convert `.txt` to `.csv` and remove last line indicating creation date) using an FTP Client (such as https://filezilla-project.org/)
-- Download `NASDAQ` Traded components via `ftp://ftp.nasdaqtrader.com/symboldirectory/` into `Indices/nasdaqtraded.csv` (Convert `.txt` to `.csv` and remove last line indicating creation date) using an FTP Client (such as https://filezilla-project.org/)
-- You can also create your own indice/group of stocks by either overriding the above files' contents or simply adding your own indice to the code support. Use Custom Mode, and example in `sss_run.py`
-- Checkout http://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs for all symbol definitions (for instance - `$` in stock names, 5-letter stocks ending with `Y`)
+- Download `NASDAQ` latest components (`otherlisted.txt`, `nasdaqlisted.txt`, `otherlisted.txt`) via `ftp://ftp.nasdaqtrader.com/symboldirectory/` into the `Indices/` folder (Convert `.txt` to `.csv`) using an FTP Client (such as https://filezilla-project.org/) -> This operation is done automatically upon each scan (with `research_mode = False`)
+- You can also create your own indice/group of stocks by either overriding the above files' contents or simply adding your own indice to the code support. Use Custom Mode, and example in `sss_config.py`
+- Checkout http://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs for all symbol definitions (for instance - `$` in stock names, 5-letter stocks ending with `Y`, etc)
 
 # Disclaimer
 - The Scan Results are __By No Neans__ to be interpreted as reccomendations.

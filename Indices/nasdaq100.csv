@@ -6,16 +6,15 @@ ADP,Automatic Data Procs
 ADSK,Autodesk Inc
 AEP,American Electric Power Company
 ALGN,Align Technology
-ALXN,Alexion Pharm Inc
 AMAT,Applied Materials
 AMD,Adv Micro Devices
 AMGN,Amgen Inc
 AMZN,Amazon.com Inc
 ANSS,Ansys Inc
-ASML,Asml Hld NY Reg
+ASML,Asml Hld NY Reg ADR
 ATVI,Activision Blizzard
 AVGO,Broadcom Ltd
-BIDU,Baidu Inc
+BIDU,Baidu Inc ADR
 BIIB,Biogen Inc
 BKNG,Booking Holdings Inc
 CDNS,Cadence Design Sys
@@ -44,13 +43,14 @@ FOXA,Fox Corp Cl A
 GILD,Gilead Sciences Inc
 GOOG,Alphabet Cl C
 GOOGL,Alphabet Cl A
+HON,Honeywell International Inc
 IDXX,Idexx Laboratories
 ILMN,Illumina Inc
 INCY,Incyte Corp
 INTC,Intel Corp
 INTU,Intuit Inc
 ISRG,Intuitive Surg Inc
-JD,Jd.com Inc Ads
+JD,Jd.com Inc ADR
 KDP,Keurig Dr Pepper Inc
 KHC,Kraft Heinz Company
 KLAC,K L A-Tencor Corp
@@ -68,7 +68,7 @@ MTCH,Match Group Inc
 MU,Micron Technology
 MXIM,Maxim Integrated
 NFLX,Netflix Inc
-NTES,Netease Inc Ads
+NTES,Netease Inc ADR
 NVDA,Nvidia Corp
 NXPI,Nxp Semiconductors
 OKTA,Okta Inc Cl A
@@ -88,7 +88,7 @@ SIRI,Sirius XM Holdings
 SNPS,Synopsys Inc
 SPLK,Splunk Inc
 SWKS,Skyworks Solutions
-TCOM,Trip.com Group Ltd
+TCOM,Trip.com Group Ltd ADR
 TEAM,Atlassian Cls A Ord
 TMUS,T-Mobile US
 TSLA,Tesla Inc
