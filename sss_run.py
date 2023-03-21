@@ -1,6 +1,6 @@
 #############################################################################
 #
-# Version 0.2.58 - Author: Asaf Ravid <asaf.rvd@gmail.com>
+# Version 0.2.59 - Author: Asaf Ravid <asaf.rvd@gmail.com>
 #
 #    Stock Screener and Scanner - based on yfinance
 #    Copyright (C) 2021 Asaf Ravid
@@ -127,7 +127,7 @@ def retrieve_path_settings(automatic_results_folder_selection_flag, research_mod
 # +----------------------------------------------------+
 #
 # In order to give a chance to all stocks fairly, always take the 1st element in the sorted list
-def get_range(csv_db_path, db_filename, column_name, num_sections, reverse, pop_1st_percentile_range=True):
+def get_range(csv_db_path, db_filename, column_name, num_sections, reverse, pop_1st_percentiles_range=1):
     csv_db_filename = csv_db_path+'/'+db_filename
     num_title_rows = 1 if "normalized" in db_filename else 2
     with open(csv_db_filename, mode='r', newline='') as engine:
@@ -154,8 +154,9 @@ def get_range(csv_db_path, db_filename, column_name, num_sections, reverse, pop_
         percentile_range.append(round(np.percentile(sorted_elements_list, percentile), sss.NUM_ROUND_DECIMALS))
         percentile += percentile_step
     percentile_range_sorted = sorted(percentile_range, reverse=reverse)
-    if pop_1st_percentile_range:
-        percentile_range_sorted.pop(1) # Since the 1st percentile and the 1st element usually give the same result, remove the 1st percentile step
+    while pop_1st_percentiles_range:
+        percentile_range_sorted.pop(0) # Since the 1st percentile and the 1st element usually give the same result, remove the 1st percentile step
+        pop_1st_percentiles_range -= 1
     return percentile_range_sorted
 
 
@@ -455,8 +456,8 @@ def research_db(sectors_list, sectors_filter_out, countries_list, countries_filt
     with open(result_list_filename_sss, 'w') as f:
         f.write("Symbol,Name,Sector,Value,Close,MA,Grade\n")
         for key in result_sorted_appearance_counter_dict_sss.keys():
-            #                                 Symbol,    Name,                    Sector Value           Close  MA                                                 Grade
-            f.write("%s,%s,%s,%s,%s,%s,%s\n"%(key[0],str(key[1]).replace(',',' '),key[2],round(key[3],5),key[4],'+' if key[0] in new_rising_list_symbols else ' ', round(result_sorted_appearance_counter_dict_sss[  key],4)))
+            #                                 Symbol,    Name,                    Sector Value           Close  MA                                                  Grade
+            f.write("%s,%s,%s,%s,%s,%s,%s\n"%(key[0],str(key[1]).replace(',',' '),key[2],round(key[3],5),key[4],'r+' if key[0] in new_rising_list_symbols else ' ', round(result_sorted_appearance_counter_dict_sss[  key],4)))
 
     # Read the reference results file without the Diff column
     ref_rows_no_diff = []
@@ -557,7 +558,7 @@ def execute():
     run_all              = sss_config.run_all               # All Nasdaq Stocks
     run_six              = sss_config.run_six               # All SIX Stocks
     run_st               = sss_config.run_st                # All (Stockholm) Swedish Stocks
-    research_mode        = sss_config.research_mode         # Research Mode
+    research_mode        = sss_config.multi_dim_scan_mode         # Research Mode
     research_mode_max_ev = sss_config.research_mode_max_ev
     automatic_results_folder_selection = sss_config.automatic_results_folder_selection
 
@@ -579,23 +580,23 @@ def execute():
     new_run_st     = path_setting_dict['new_run_st']
 
     if not research_mode:   # Run Build DB Only:
-        if run_custom_tase: sss.sss_run(reference_run=reference_run_custom, sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=1, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=1, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         custom_portfolio=sss_config.custom_portfolio_tase)
-        if run_custom:      sss.sss_run(reference_run=reference_run_custom, sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         custom_portfolio=sss_config.custom_portfolio)
-        if run_tase:        sss.sss_run(reference_run=reference_run_tase,   sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=1, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=1, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=['Technology', 'Real Estate'       ], favor_sectors_by=[7.0,  1.0],)
-        if run_nsr:         sss.sss_run(reference_run=reference_run_nsr,    sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=['Technology', 'Financial Services'], favor_sectors_by=[7.0,  1.0])
-        if run_all:         sss.sss_run(reference_run=reference_run_all,    sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_US,  tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=['Technology', 'Financial Services'], favor_sectors_by=[7.0,  1.0])
-        if run_six:         sss.sss_run(reference_run=reference_run_six,    sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_SIX, tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         )
-        if run_st:          sss.sss_run(reference_run=reference_run_st,     sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_ST,  tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         )
+        if run_custom_tase: sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_custom, sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=1, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=1, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         custom_portfolio=sss_config.custom_portfolio_tase)
+        if run_custom:      sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_custom, sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_US,  tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         custom_portfolio=sss_config.custom_portfolio)
+        if run_tase:        sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_tase,   sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=1, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=1, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=['Technology', 'Real Estate'       ], favor_sectors_by=[3.0,  1.0],)
+        if run_nsr:         sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_nsr,    sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_OFF, tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=['Technology', 'Financial Services'], favor_sectors_by=[3.0,  1.0])
+        if run_all:         sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_all,    sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_US,  tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=['Technology', 'Financial Services'], favor_sectors_by=[3.0,  1.0])
+        if run_six:         sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_six,    sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_SIX, tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         )
+        if run_st:          sss.sss_run(yq_mode=sss_config.yq_mode, reference_run=reference_run_st,     sectors_list=[], sectors_filter_out=0, countries_list=[], countries_filter_out=0, csv_db_path='None', db_filename='None', read_all_country_symbols=sss_config.ALL_COUNTRY_SYMBOLS_ST,  tase_mode=0, research_mode=0, profit_margin_limit=0.0001, ev_to_cfo_ratio_limit=10e9, debt_to_equity_limit=10e9, pb_limit=0, pi_limit=0, enterprise_value_millions_usd_limit=5, research_mode_max_ev=False, price_to_earnings_limit=10e9, enterprise_value_to_revenue_limit=10e9, favor_sectors=[],                                   favor_sectors_by=[],         )
     else:                   # Research Mode:
         if run_tase:
             if not sss_config.aggregate_only:
                 for db_filename in DB_FILENAMES:
-                    pb_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='price_to_book',           num_sections=1 if sss_config.custom_sss_value_equation else 5, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else False)  # TODO: ASAFR: Revisit this - perhaps no popping required for non-TASE as well?
-                    pi_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='held_percent_insiders',   num_sections=1 if sss_config.custom_sss_value_equation else 3, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else False)
-                    ev_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='enterprise_value',        num_sections=2 if sss_config.custom_sss_value_equation else 3, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else False)
-                    pe_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='pe_effective',            num_sections=2 if sss_config.custom_sss_value_equation else 5, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else False)
-                    evr_range_tase        = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='evr_effective',           num_sections=2 if sss_config.custom_sss_value_equation else 6, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else False)
-                    pm_ratios_range_tase  = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='effective_profit_margin', num_sections=2 if sss_config.custom_sss_value_equation else 7, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else False)
+                    pb_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='price_to_book',           num_sections=1 if sss_config.custom_sss_value_equation else 5, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 0)  # TODO: ASAFR: Revisit this - perhaps no popping required for non-TASE as well?
+                    pi_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='held_percent_insiders',   num_sections=1 if sss_config.custom_sss_value_equation else 2, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 0)
+                    ev_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='enterprise_value',        num_sections=1 if sss_config.custom_sss_value_equation else 4, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 0)
+                    pe_range_tase         = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='pe_effective',            num_sections=2 if sss_config.custom_sss_value_equation else 5, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 0)
+                    evr_range_tase        = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='evr_effective',           num_sections=2 if sss_config.custom_sss_value_equation else 6, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 0)
+                    pm_ratios_range_tase  = get_range(csv_db_path=new_run_tase, db_filename=db_filename, column_name='effective_profit_margin', num_sections=2 if sss_config.custom_sss_value_equation else 7, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 0)
 
                     ev_millions_range_tase= [int(  ev/1000000                       ) for ev in ev_range_tase       ]
                     pm_range_tase         = [round(pm*100,    sss.NUM_ROUND_DECIMALS) for pm in pm_ratios_range_tase]
@@ -607,12 +608,12 @@ def execute():
         if run_nsr:
             if not sss_config.aggregate_only:
                 for db_filename in DB_FILENAMES:
-                    pb_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='price_to_book',           num_sections=1 if sss_config.custom_sss_value_equation else 6, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    pi_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='held_percent_insiders',   num_sections=1 if sss_config.custom_sss_value_equation else 4, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    ev_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='enterprise_value',        num_sections=3 if sss_config.custom_sss_value_equation else 4, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    pe_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='pe_effective',            num_sections=3 if sss_config.custom_sss_value_equation else 6, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    evr_range_nsr         = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='evr_effective',           num_sections=3 if sss_config.custom_sss_value_equation else 7, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    pm_ratios_range_nsr   = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='effective_profit_margin', num_sections=3 if sss_config.custom_sss_value_equation else 8, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
+                    pb_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='price_to_book',           num_sections=1 if sss_config.custom_sss_value_equation else 6, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 1)
+                    pi_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='held_percent_insiders',   num_sections=1 if sss_config.custom_sss_value_equation else 2, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 1)
+                    ev_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='enterprise_value',        num_sections=1 if sss_config.custom_sss_value_equation else 2, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 1)
+                    pe_range_nsr          = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='pe_effective',            num_sections=3 if sss_config.custom_sss_value_equation else 6, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 1)
+                    evr_range_nsr         = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='evr_effective',           num_sections=3 if sss_config.custom_sss_value_equation else 7, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 1)
+                    pm_ratios_range_nsr   = get_range(csv_db_path=new_run_nsr,  db_filename=db_filename, column_name='effective_profit_margin', num_sections=3 if sss_config.custom_sss_value_equation else 8, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 1)
 
                     ev_millions_range_nsr = [int(  ev/1000000                       ) for ev in ev_range_nsr       ]
                     pm_range_nsr          = [round(pm*100,    sss.NUM_ROUND_DECIMALS) for pm in pm_ratios_range_nsr]
@@ -624,12 +625,12 @@ def execute():
         if run_all:
             if not sss_config.aggregate_only:
                 for db_filename in DB_FILENAMES:
-                    pb_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='price_to_book',            num_sections= 1 if sss_config.custom_sss_value_equation else  7, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    pi_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='held_percent_insiders',    num_sections= 1 if sss_config.custom_sss_value_equation else  5, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    ev_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='enterprise_value',         num_sections=14 if sss_config.custom_sss_value_equation else 14, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    pe_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='pe_effective',             num_sections= 4 if sss_config.custom_sss_value_equation else  7, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    evr_range_all         = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='evr_effective',            num_sections= 4 if sss_config.custom_sss_value_equation else  7, reverse=1, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
-                    pm_ratios_range_all   = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='effective_profit_margin',  num_sections= 4 if sss_config.custom_sss_value_equation else  9, reverse=0, pop_1st_percentile_range=False if sss_config.custom_sss_value_equation else True)
+                    pb_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='price_to_book',            num_sections=1 if sss_config.custom_sss_value_equation else 7, reverse=1, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 2)
+                    pi_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='held_percent_insiders',    num_sections=1 if sss_config.custom_sss_value_equation else 5, reverse=0, pop_1st_percentiles_range=0 if sss_config.custom_sss_value_equation else 2)
+                    ev_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='enterprise_value',         num_sections=5 if sss_config.custom_sss_value_equation else 7, reverse=0, pop_1st_percentiles_range=2 if sss_config.custom_sss_value_equation else 2)
+                    pe_range_all          = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='pe_effective',             num_sections=4 if sss_config.custom_sss_value_equation else 7, reverse=1, pop_1st_percentiles_range=2 if sss_config.custom_sss_value_equation else 2)
+                    evr_range_all         = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='evr_effective',            num_sections=4 if sss_config.custom_sss_value_equation else 7, reverse=1, pop_1st_percentiles_range=2 if sss_config.custom_sss_value_equation else 2)
+                    pm_ratios_range_all   = get_range(csv_db_path=new_run_all, db_filename=db_filename, column_name='effective_profit_margin',  num_sections=4 if sss_config.custom_sss_value_equation else 9, reverse=0, pop_1st_percentiles_range=2 if sss_config.custom_sss_value_equation else 2)
 
                     ev_millions_range_all = [int(  ev/1000000                       ) for ev in ev_range_all       ]
                     pm_range_all          = [round(pm*100,    sss.NUM_ROUND_DECIMALS) for pm in pm_ratios_range_all]
@@ -641,12 +642,12 @@ def execute():
         if run_six:
             if not sss_config.aggregate_only:
                 for db_filename in DB_FILENAMES:
-                    pb_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='price_to_book',            num_sections=4, reverse=1, pop_1st_percentile_range=False)
-                    pi_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='held_percent_insiders',    num_sections=2, reverse=0, pop_1st_percentile_range=False)
-                    ev_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='enterprise_value',         num_sections=3, reverse=0, pop_1st_percentile_range=False)
-                    pe_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='pe_effective',             num_sections=4, reverse=1, pop_1st_percentile_range=False)
-                    evr_range_six         = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='evr_effective',            num_sections=5, reverse=1, pop_1st_percentile_range=False)
-                    pm_ratios_range_six   = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='effective_profit_margin',  num_sections=6, reverse=0, pop_1st_percentile_range=False)
+                    pb_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='price_to_book',            num_sections=4, reverse=1, pop_1st_percentiles_range=0)
+                    pi_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='held_percent_insiders',    num_sections=2, reverse=0, pop_1st_percentiles_range=0)
+                    ev_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='enterprise_value',         num_sections=4, reverse=0, pop_1st_percentiles_range=0)
+                    pe_range_six          = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='pe_effective',             num_sections=4, reverse=1, pop_1st_percentiles_range=0)
+                    evr_range_six         = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='evr_effective',            num_sections=5, reverse=1, pop_1st_percentiles_range=0)
+                    pm_ratios_range_six   = get_range(csv_db_path=new_run_six, db_filename=db_filename, column_name='effective_profit_margin',  num_sections=6, reverse=0, pop_1st_percentiles_range=0)
 
                     ev_millions_range_six = [int(  ev/1000000                       ) for ev in ev_range_six       ]
                     pm_range_six          = [round(pm*100,    sss.NUM_ROUND_DECIMALS) for pm in pm_ratios_range_six]
