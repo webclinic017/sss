@@ -1384,7 +1384,7 @@ def calculate_weighted_sum_from_2_dicts(dict1_input, dict1_name, str_in_dict1, d
             if str_in_dict1 in dict1_input[key] and not math.isnan(dict1_input[key][str_in_dict1]) and str_in_dict2 in dict2_input[key] and not math.isnan(dict2_input[key][str_in_dict2]):
                 weighted_sums_list.append((dict1_input[key][str_in_dict1] + dict2_input[key][str_in_dict2]))
     except Exception as e:
-        print("Exception in {} {} {}: {} -> ".format(stock_data.symbol, dict1_name, dict2_name, e, traceback.format_exc()))
+        print("Exception in {} {} {}: {} -> {} -> quarterly/yearly database mismatch? Check".format(stock_data.symbol, dict1_name, dict2_name, e, traceback.format_exc()))
         pass
     if len(weighted_sums_list): return_value = sum(weighted_sums_list) if force_only_sum else weighted_average(weighted_sums_list, weights[:len(weighted_sums_list)])
 
@@ -1531,8 +1531,11 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
                 earnings_quarterly       = symbol['earnings_quarterly'      ] if 'earnings_quarterly'       in symbol else None
             else:
                 if yq_mode:
-                    stock_data.financial_currency = symbol.financial_data[stock_data.symbol]['financialCurrency']
-                    stock_data.summary_currency = symbol.price[stock_data.symbol]['currency']
+                    if 'financialCurrency' in symbol.financial_data[stock_data.symbol.replace('.','-')]:
+                        stock_data.financial_currency = symbol.financial_data[stock_data.symbol.replace('.','-')]['financialCurrency']
+
+                    if 'currency' in symbol.price[stock_data.symbol.replace('.','-')]:
+                        stock_data.summary_currency = symbol.price[stock_data.symbol.replace('.','-')]['currency']
 
                 else:
                     info                     = symbol.get_info()
@@ -1551,14 +1554,15 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
                     earnings_quarterly       = stringify_keys(d=earnings_quarterly,       check_inner=False)
                     stock_data.financial_currency = 'ILS' if tase_mode else 'USD'  # TODO: ASAFR: handle for if isinstance(symbol, dict)?
 
-            if   earnings_yearly    != None and 'financialCurrency' in earnings_yearly:    stock_data.financial_currency = earnings_yearly[   'financialCurrency']
-            elif earnings_quarterly != None and 'financialCurrency' in earnings_quarterly: stock_data.financial_currency = earnings_quarterly['financialCurrency']
+            if not yq_mode:
+                if   earnings_yearly    != None and 'financialCurrency' in earnings_yearly:    stock_data.financial_currency = earnings_yearly[   'financialCurrency']
+                elif earnings_quarterly != None and 'financialCurrency' in earnings_quarterly: stock_data.financial_currency = earnings_quarterly['financialCurrency']
 
 
-            if   earnings_yearly    != None and 'financialCurrency' in earnings_yearly:    stock_data.financial_currency = earnings_yearly[   'financialCurrency']
-            elif earnings_quarterly != None and 'financialCurrency' in earnings_quarterly: stock_data.financial_currency = earnings_quarterly['financialCurrency']
+                if   earnings_yearly    != None and 'financialCurrency' in earnings_yearly:    stock_data.financial_currency = earnings_yearly[   'financialCurrency']
+                elif earnings_quarterly != None and 'financialCurrency' in earnings_quarterly: stock_data.financial_currency = earnings_quarterly['financialCurrency']
 
-            stock_data.summary_currency = info['currency'] if 'currency' in info else stock_data.financial_currency  # Used for market_cap and enterprise_value conversions
+                stock_data.summary_currency = info['currency'] if 'currency' in info else stock_data.financial_currency  # Used for market_cap and enterprise_value conversions
 
             # Currency Conversion Rules, per yfinance Data Display Methods:
             #
@@ -1573,8 +1577,11 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
             if stock_data.summary_currency == 'ILA' or stock_data.summary_currency == 'NIS':  # Sometimes (in TASE mode) in info['currency'] ILA may show instead of ILS so just substitute
                 stock_data.summary_currency = 'ILS'
             if currency_conversion_tool:
-                stock_data.financial_currency_conversion_rate_mult_to_usd = round(1.0/float(currency_conversion_tool[stock_data.financial_currency] if stock_data.financial_currency != None else 1.0), NUM_ROUND_DECIMALS)  # conversion_rate is the value to multiply the foreign exchange (in which the stock's currency is) by to get the original value in USD. For instance if the currency is ILS, values should be divided by ~3.3
-                stock_data.summary_currency_conversion_rate_mult_to_usd   = round(1.0/float(currency_conversion_tool[stock_data.summary_currency  ] if stock_data.summary_currency   != None else 1.0), NUM_ROUND_DECIMALS)  # conversion_rate is the value to multiply the foreign exchange (in which the stock's currency is) by to get the original value in USD. For instance if the currency is ILS, values should be divided by ~3.3
+                if stock_data.financial_currency and stock_data.financial_currency != 'None':
+                    stock_data.financial_currency_conversion_rate_mult_to_usd = round(1.0/float(currency_conversion_tool[stock_data.financial_currency]), NUM_ROUND_DECIMALS)  # conversion_rate is the value to multiply the foreign exchange (in which the stock's currency is) by to get the original value in USD. For instance if the currency is ILS, values should be divided by ~3.3
+                else:
+                    stock_data.financial_currency_conversion_rate_mult_to_usd = 1.0
+                stock_data.summary_currency_conversion_rate_mult_to_usd   = round(1.0/float(currency_conversion_tool[stock_data.summary_currency  ] if stock_data.summary_currency   else 1.0), NUM_ROUND_DECIMALS)  # conversion_rate is the value to multiply the foreign exchange (in which the stock's currency is) by to get the original value in USD. For instance if the currency is ILS, values should be divided by ~3.3
             elif currency_conversion_tool_alternative:
                 try:
                     stock_data.financial_currency_conversion_rate_mult_to_usd = round(float(currency_conversion_tool_alternative.convert(1.0, stock_data.financial_currency, 'USD')), NUM_ROUND_DECIMALS)  # conversion_rate is the value to multiply the foreign exchange (in which the stock's currency is) by to get the original value in USD. For instance if the currency is ILS, values should be divided by ~3.3
@@ -1588,20 +1595,49 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
                 stock_data.summary_currency_conversion_rate_mult_to_usd   = round(1.0 / float(currency_conversion_tool_manual[stock_data.summary_currency  ]), NUM_ROUND_DECIMALS)  # conversion_rate is the value to multiply the foreign exchange (in which the stock's currency is) by to get the original value in USD. For instance if the currency is ILS, values should be divided by ~3.3
 
             if yq_mode:
-                balanceSheetHistoryYearly = symbol.all_modules[stock_data.symbol]['balanceSheetHistory']
-                balanceSheetHistoryQuarterly = symbol.all_modules[stock_data.symbol]['balanceSheetHistoryQuarterly']
-                defaultKeyStatistics = symbol.all_modules[stock_data.symbol]['defaultKeyStatistics']
-                assetProfile = symbol.all_modules[stock_data.symbol]['assetProfile']
-                incomeStatementHistoryYearly = symbol.all_modules[stock_data.symbol]['incomeStatementHistory']
-                incomeStatementHistoryQuarterly = symbol.all_modules[stock_data.symbol]['incomeStatementHistory']
+                balanceSheetHistoryYearly         = None
+                balanceSheetHistoryQuarterly      = None
+                cashflowStatementHistoryYearly    = None
+                cashflowStatementHistoryQuarterly = None
+                defaultKeyStatistics              = None
+                summaryDetail                     = None
+                assetProfile                      = None
+                incomeStatementHistoryYearly      = None
+                incomeStatementHistoryQuarterly   = None
+                quoteType                         = None
 
-                earnings_yearly_yq = []
-                earnings_quarterly_yq = []
+                if 'balanceSheetHistory'               in symbol.all_modules[stock_data.symbol.replace('.','-')]: balanceSheetHistoryYearly         = symbol.all_modules[stock_data.symbol.replace('.','-')]['balanceSheetHistory']
+                if 'balanceSheetHistoryQuarterly'      in symbol.all_modules[stock_data.symbol.replace('.','-')]: balanceSheetHistoryQuarterly      = symbol.all_modules[stock_data.symbol.replace('.','-')]['balanceSheetHistoryQuarterly']
+                if 'cashflowStatementHistory'          in symbol.all_modules[stock_data.symbol.replace('.','-')]: cashflowStatementHistoryYearly    = symbol.all_modules[stock_data.symbol.replace('.','-')]['cashflowStatementHistory']
+                if 'cashflowStatementHistoryQuarterly' in symbol.all_modules[stock_data.symbol.replace('.','-')]: cashflowStatementHistoryQuarterly = symbol.all_modules[stock_data.symbol.replace('.','-')]['cashflowStatementHistoryQuarterly']
+                if 'defaultKeyStatistics'              in symbol.all_modules[stock_data.symbol.replace('.','-')]: defaultKeyStatistics              = symbol.all_modules[stock_data.symbol.replace('.','-')]['defaultKeyStatistics']
+                if 'summaryDetail'                     in symbol.all_modules[stock_data.symbol.replace('.','-')]: summaryDetail                     = symbol.all_modules[stock_data.symbol.replace('.','-')]['summaryDetail']
+                if 'assetProfile'                      in symbol.all_modules[stock_data.symbol.replace('.','-')]: assetProfile                      = symbol.all_modules[stock_data.symbol.replace('.','-')]['assetProfile']
+                if 'incomeStatementHistory'            in symbol.all_modules[stock_data.symbol.replace('.','-')]: incomeStatementHistoryYearly      = symbol.all_modules[stock_data.symbol.replace('.','-')]['incomeStatementHistory']
+                if 'incomeStatementHistory'            in symbol.all_modules[stock_data.symbol.replace('.','-')]: incomeStatementHistoryQuarterly   = symbol.all_modules[stock_data.symbol.replace('.','-')]['incomeStatementHistoryQuarterly']
+                if 'quoteType'                         in symbol.all_modules[stock_data.symbol.replace('.','-')]: quoteType                         = symbol.all_modules[stock_data.symbol.replace('.','-')]['quoteType']
 
+                earningsYearly    = None
+                earningsQuarterly = None
+                if 'earnings' in symbol.all_modules[stock_data.symbol.replace('.','-')]:
+                    earningsYearly    = symbol.all_modules[stock_data.symbol.replace('.','-')]['earnings']['financialsChart']['yearly']
+                    earningsQuarterly = symbol.all_modules[stock_data.symbol.replace('.','-')]['earnings']['financialsChart']['quarterly']
+
+                financialData     = symbol.financial_data[stock_data.symbol.replace('.','-')]
+
+                earnings_yearly_yq = {}
+                earnings_quarterly_yq = {}
+
+                retained_earnings_yearly_yq = []
+                retained_earnings_quarterly_yq = []
+
+                total_stockholder_equity_yearly_yq = []
+                total_stockholder_equity_quarterly_yq = []
                 total_current_assets_yearly_yq = []
                 total_assets_yearly_yq = []
                 total_current_liabilities_yearly_yq = []
                 total_liabilities_yearly_yq = []
+                other_liabilities_yearly_yq = []
                 other_current_assets_yearly_yq = []
                 other_current_liabilities_yearly_yq = []
                 other_assets_yearly_yq = []
@@ -1610,6 +1646,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
                 total_assets_quarterly_yq = []
                 total_current_liabilities_quarterly_yq = []
                 total_liabilities_quarterly_yq = []
+                other_liabilities_quarterly_yq = []
                 other_current_assets_quarterly_yq = []
                 other_current_liabilities_quarterly_yq = []
                 other_assets_quarterly_yq = []
@@ -1617,74 +1654,182 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
                 balance_sheets_yearly_yq = {}
                 balance_sheets_quarterly_yq = {}
 
-                for list_element_dict in balanceSheetHistoryYearly['balanceSheetStatements']:
-                    balance_sheets_yearly_yq[list_element_dict['endDate']] = {}
-                    if 'retainedEarnings'        in list_element_dict:
-                        earnings_yearly_yq.append(list_element_dict['retainedEarnings'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['retainedEarnings'] = list_element_dict['retainedEarnings']
-                    if 'totalCurrentAssets'      in list_element_dict:
-                        total_current_assets_yearly_yq.append(list_element_dict['totalCurrentAssets'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['totalCurrentAssets'] = list_element_dict['totalCurrentAssets']
-                    if 'totalAssets'             in list_element_dict:
-                        total_assets_yearly_yq.append(list_element_dict['totalAssets'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['totalAssets'] = list_element_dict['totalAssets']
-                    if 'totalCurrentLiabilities' in list_element_dict:
-                        total_current_liabilities_yearly_yq.append(list_element_dict['totalCurrentLiabilities'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['totalCurrentLiabilities'] = list_element_dict['totalCurrentLiabilities']
-                    if 'totalLiab'               in list_element_dict:
-                        total_liabilities_yearly_yq.append(list_element_dict['totalLiab'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['totalLiab'] = list_element_dict['totalLiab']
-                    if 'otherCurrentAssets'      in list_element_dict:
-                        other_current_assets_yearly_yq.append(list_element_dict['otherCurrentAssets'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['otherCurrentAssets'] = list_element_dict['otherCurrentAssets']
-                    if 'otherCurrentLiab'        in list_element_dict:
-                        other_current_liabilities_yearly_yq.append(list_element_dict['otherCurrentLiab'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['otherCurrentLiab'] = list_element_dict['otherCurrentLiab']
-                    if 'otherAssets'             in list_element_dict:
-                        other_assets_yearly_yq.append(list_element_dict['otherAssets'])
-                        balance_sheets_yearly_yq[list_element_dict['endDate']]['otherAssets'] = list_element_dict['otherAssets']
+                total_cash_from_operating_activities_yearly_yq = []
+                total_cash_from_operating_activities_quarterly_yq = []
+                depreciation_yearly_yq = []
+                depreciation_quarterly_yq = []
 
-                for list_element_dict in balanceSheetHistoryQuarterly['balanceSheetStatements']:
-                    balance_sheets_quarterly_yq[list_element_dict['endDate']] = {}
-                    if 'retainedEarnings'        in list_element_dict:
-                        earnings_quarterly_yq.append(list_element_dict['retainedEarnings'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['retainedEarnings'] = list_element_dict['retainedEarnings']
-                    if 'totalCurrentAssets'      in list_element_dict:
-                        total_current_assets_quarterly_yq.append(list_element_dict['totalCurrentAssets'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['totalCurrentAssets'] = list_element_dict['totalCurrentAssets']
-                    if 'totalAssets'             in list_element_dict:
-                        total_assets_quarterly_yq.append(list_element_dict['totalAssets'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['totalAssets'] = list_element_dict['totalAssets']
-                    if 'totalCurrentLiabilities' in list_element_dict:
-                        total_current_liabilities_quarterly_yq.append(list_element_dict['totalCurrentLiabilities'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['totalCurrentLiabilities'] = list_element_dict['totalCurrentLiabilities']
-                    if 'totalLiab'               in list_element_dict:
-                        total_liabilities_quarterly_yq.append(list_element_dict['totalLiab'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['totalLiab'] = list_element_dict['totalLiab']
-                    if 'otherCurrentAssets'      in list_element_dict:
-                        other_current_assets_quarterly_yq.append(list_element_dict['otherCurrentAssets'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['otherCurrentAssets'] = list_element_dict['otherCurrentAssets']
-                    if 'otherCurrentLiab'        in list_element_dict:
-                        other_current_liabilities_quarterly_yq.append(list_element_dict['otherCurrentLiab'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['otherCurrentLiab'] = list_element_dict['otherCurrentLiab']
-                    if 'otherAssets'             in list_element_dict:
-                        other_assets_quarterly_yq.append(list_element_dict['otherAssets'])
-                        balance_sheets_quarterly_yq[list_element_dict['endDate']]['otherAssets'] = list_element_dict['otherAssets']
+                cash_flows_yearly_yq = {}
+                cash_flows_quarterly_yq = {}
+
+                earnings_yearly_yq["Earnings"] = {}
+                earnings_yearly_yq["Revenue"] = {}
+                if earningsYearly:
+                    for list_element_dict in earningsYearly:
+                        earnings_yearly_yq["Earnings"][list_element_dict["date"]] = list_element_dict["earnings"]
+                        earnings_yearly_yq["Revenue"][list_element_dict["date"]] = list_element_dict["revenue"]
+
+                earnings_quarterly_yq["Earnings"] = {}
+                earnings_quarterly_yq["Revenue"] = {}
+                if earningsQuarterly:
+                    for list_element_dict in earningsQuarterly:
+                        earnings_quarterly_yq["Earnings"][list_element_dict["date"]] = list_element_dict["earnings"]
+                        earnings_quarterly_yq["Revenue"][list_element_dict["date"]] = list_element_dict["revenue"]
+
+
+                if balanceSheetHistoryYearly:
+                    for list_element_dict in balanceSheetHistoryYearly['balanceSheetStatements']:
+                        balance_sheets_yearly_yq[list_element_dict['endDate']] = {}
+                        if 'retainedEarnings'        in list_element_dict:
+                            retained_earnings_yearly_yq.append(list_element_dict['retainedEarnings'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Retained Earnings'] = list_element_dict['retainedEarnings']
+                        if 'totalStockholderEquity'        in list_element_dict:
+                            total_stockholder_equity_yearly_yq.append(list_element_dict['totalStockholderEquity'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Total Stockholder Equity'] = list_element_dict['totalStockholderEquity']
+                        if 'totalCurrentAssets'      in list_element_dict:
+                            total_current_assets_yearly_yq.append(list_element_dict['totalCurrentAssets'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Total Current Assets'] = list_element_dict['totalCurrentAssets']
+                        if 'totalAssets'             in list_element_dict:
+                            total_assets_yearly_yq.append(list_element_dict['totalAssets'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Total Assets'] = list_element_dict['totalAssets']
+                        if 'totalCurrentLiabilities' in list_element_dict:
+                            total_current_liabilities_yearly_yq.append(list_element_dict['totalCurrentLiabilities'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Total Current Liabilities'] = list_element_dict['totalCurrentLiabilities']
+                        if 'totalLiab'               in list_element_dict:
+                            total_liabilities_yearly_yq.append(list_element_dict['totalLiab'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Total Liab'] = list_element_dict['totalLiab']
+                        if 'otherLiab'               in list_element_dict:
+                            other_liabilities_yearly_yq.append(list_element_dict['otherLiab'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Other Liab'] = list_element_dict['otherLiab']
+                        if 'otherCurrentAssets'      in list_element_dict:
+                            other_current_assets_yearly_yq.append(list_element_dict['otherCurrentAssets'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Other Current Assets'] = list_element_dict['otherCurrentAssets']
+                        if 'otherCurrentLiab'        in list_element_dict:
+                            other_current_liabilities_yearly_yq.append(list_element_dict['otherCurrentLiab'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Other Current Liab'] = list_element_dict['otherCurrentLiab']
+                        if 'otherAssets'             in list_element_dict:
+                            other_assets_yearly_yq.append(list_element_dict['otherAssets'])
+                            balance_sheets_yearly_yq[list_element_dict['endDate']]['Other Assets'] = list_element_dict['otherAssets']
+
+                if balanceSheetHistoryQuarterly:
+                    for list_element_dict in balanceSheetHistoryQuarterly['balanceSheetStatements']:
+                        balance_sheets_quarterly_yq[list_element_dict['endDate']] = {}
+                        if 'retainedEarnings'        in list_element_dict:
+                            retained_earnings_quarterly_yq.append(list_element_dict['retainedEarnings'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Retained Earnings'] = list_element_dict['retainedEarnings']
+                        if 'totalStockholderEquity'        in list_element_dict:
+                            total_stockholder_equity_quarterly_yq.append(list_element_dict['totalStockholderEquity'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Total Stockholder Equity'] = list_element_dict['totalStockholderEquity']
+                        if 'totalCurrentAssets'      in list_element_dict:
+                            total_current_assets_quarterly_yq.append(list_element_dict['totalCurrentAssets'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Total Current Assets'] = list_element_dict['totalCurrentAssets']
+                        if 'totalAssets'             in list_element_dict:
+                            total_assets_quarterly_yq.append(list_element_dict['totalAssets'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Total Assets'] = list_element_dict['totalAssets']
+                        if 'totalCurrentLiabilities' in list_element_dict:
+                            total_current_liabilities_quarterly_yq.append(list_element_dict['totalCurrentLiabilities'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Total Current Liabilities'] = list_element_dict['totalCurrentLiabilities']
+                        if 'totalLiab'               in list_element_dict:
+                            total_liabilities_quarterly_yq.append(list_element_dict['totalLiab'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Total Liab'] = list_element_dict['totalLiab']
+                        if 'otherLiab'               in list_element_dict:
+                            other_liabilities_quarterly_yq.append(list_element_dict['otherLiab'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Other Liab'] = list_element_dict['otherLiab']
+                        if 'otherCurrentAssets'      in list_element_dict:
+                            other_current_assets_quarterly_yq.append(list_element_dict['otherCurrentAssets'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Other Current Assets'] = list_element_dict['otherCurrentAssets']
+                        if 'otherCurrentLiab'        in list_element_dict:
+                            other_current_liabilities_quarterly_yq.append(list_element_dict['otherCurrentLiab'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Other Current Liab'] = list_element_dict['otherCurrentLiab']
+                        if 'otherAssets'             in list_element_dict:
+                            other_assets_quarterly_yq.append(list_element_dict['otherAssets'])
+                            balance_sheets_quarterly_yq[list_element_dict['endDate']]['Other Assets'] = list_element_dict['otherAssets']
+
+                if cashflowStatementHistoryYearly:
+                    for list_element_dict in cashflowStatementHistoryYearly['cashflowStatements']:
+                        cash_flows_yearly_yq[list_element_dict['endDate']] = {}
+
+                        if 'totalCashFromOperatingActivities' in list_element_dict:
+                            total_cash_from_operating_activities_yearly_yq.append(list_element_dict['totalCashFromOperatingActivities'])
+                            cash_flows_yearly_yq[list_element_dict['endDate']]['Total Cash From Operating Activities'] = list_element_dict['totalCashFromOperatingActivities']
+                        if 'depreciation' in list_element_dict:
+                            depreciation_yearly_yq.append(list_element_dict['depreciation'])
+                            cash_flows_yearly_yq[list_element_dict['endDate']]['Depreciation'] = list_element_dict['depreciation']
+
+                if cashflowStatementHistoryQuarterly:
+                    for list_element_dict in cashflowStatementHistoryQuarterly['cashflowStatements']:
+                        cash_flows_quarterly_yq[list_element_dict['endDate']] = {}
+
+                        if 'totalCashFromOperatingActivities' in list_element_dict:
+                            total_cash_from_operating_activities_quarterly_yq.append(list_element_dict['totalCashFromOperatingActivities'])
+                            cash_flows_quarterly_yq[list_element_dict['endDate']]['Total Cash From Operating Activities'] = list_element_dict['totalCashFromOperatingActivities']
+                        if 'depreciation' in list_element_dict:
+                            depreciation_quarterly_yq.append(list_element_dict['depreciation'])
+                            cash_flows_quarterly_yq[list_element_dict['endDate']]['Depreciation'] = list_element_dict['depreciation']
+
+                financials_yearly_yq = {}
+                financials_quarterly_yq = {}
 
                 total_revenue_yearly_yq = []
                 total_revenue_quarterly_yq = []
-                for list_element_dict in incomeStatementHistoryYearly['incomeStatementHistory']:
-                    total_revenue_yearly_yq.append(list_element_dict['totalRevenue'])
-                for list_element_dict in incomeStatementHistoryQuarterly['incomeStatementHistory']:
-                    total_revenue_quarterly_yq.append(list_element_dict['totalRevenue'])
+                if incomeStatementHistoryYearly:
+                    for list_element_dict in incomeStatementHistoryYearly['incomeStatementHistory']:
+                        total_revenue_yearly_yq.append(list_element_dict['totalRevenue'])
+                        financials_yearly_yq[list_element_dict["endDate"]] = {}
+                        financials_yearly_yq[list_element_dict["endDate"]]['Income Before Tax']                      = list_element_dict["incomeBeforeTax"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Net Income']                             = list_element_dict["netIncome"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Total Revenue']                          = list_element_dict["totalRevenue"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Cost Of Revenue']                        = list_element_dict["costOfRevenue"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Gross Profit']                           = list_element_dict["grossProfit"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Total Operating Expenses']               = list_element_dict["totalOperatingExpenses"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Operating Income']                       = list_element_dict["operatingIncome"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Total Other Income Expense Net']         = list_element_dict["totalOtherIncomeExpenseNet"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Ebit']                                   = list_element_dict["ebit"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Interest Expense']                       = list_element_dict["interestExpense"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Income Before Tax']                      = list_element_dict["incomeBeforeTax"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Income Tax Expense']                     = list_element_dict["incomeTaxExpense"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Net Income From Continuing Ops']         = list_element_dict["netIncomeFromContinuingOps"]
+                        financials_yearly_yq[list_element_dict["endDate"]]['Net Income Applicable To Common Shares'] = list_element_dict["netIncomeApplicableToCommonShares"]
 
-                stock_data.sector = assetProfile['sector']
-                enterprise_value_yq = defaultKeyStatistics['enterpriseValue']
-                profit_margins_yq = defaultKeyStatistics['profitMargins']
-                held_percent_insiders_yq = defaultKeyStatistics['heldPercentInsiders']
-                book_value_yq = defaultKeyStatistics['bookValue']
-                enterprise_to_revenue_yq = defaultKeyStatistics['enterpriseToRevenue']
-                enterprise_to_ebitda_yq = defaultKeyStatistics['enterpriseToEbitda']
+
+                if incomeStatementHistoryQuarterly:
+                    for list_element_dict in incomeStatementHistoryQuarterly['incomeStatementHistory']:
+                        total_revenue_quarterly_yq.append(list_element_dict['totalRevenue'])
+                        financials_quarterly_yq[list_element_dict["endDate"]] = {}
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Income Before Tax']                      = list_element_dict["incomeBeforeTax"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Net Income']                             = list_element_dict["netIncome"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Total Revenue']                          = list_element_dict["totalRevenue"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Cost Of Revenue']                        = list_element_dict["costOfRevenue"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Gross Profit']                           = list_element_dict["grossProfit"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Total Operating Expenses']               = list_element_dict["totalOperatingExpenses"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Operating Income']                       = list_element_dict["operatingIncome"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Total Other Income Expense Net']         = list_element_dict["totalOtherIncomeExpenseNet"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Ebit']                                   = list_element_dict["ebit"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Interest Expense']                       = list_element_dict["interestExpense"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Income Before Tax']                      = list_element_dict["incomeBeforeTax"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Income Tax Expense']                     = list_element_dict["incomeTaxExpense"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Net Income From Continuing Ops']         = list_element_dict["netIncomeFromContinuingOps"]
+                        financials_quarterly_yq[list_element_dict["endDate"]]['Net Income Applicable To Common Shares'] = list_element_dict["netIncomeApplicableToCommonShares"]
+
+                if assetProfile:
+                    stock_data.sector = assetProfile['sector']
+
+                if defaultKeyStatistics:
+                    if 'enterpriseValue'         in defaultKeyStatistics: info['enterpriseValue']         = defaultKeyStatistics['enterpriseValue']
+                    if 'profitMargins'           in defaultKeyStatistics: info['profitMargins']           = defaultKeyStatistics['profitMargins']
+                    if 'heldPercentInsiders'     in defaultKeyStatistics: info['heldPercentInsiders']     = defaultKeyStatistics['heldPercentInsiders']
+                    if 'heldPercentInstitutions' in defaultKeyStatistics: info['heldPercentInstitutions'] = defaultKeyStatistics['heldPercentInstitutions']
+                    if 'bookValue'               in defaultKeyStatistics: book_value_yq                = defaultKeyStatistics['bookValue']
+                    if 'priceToBook'             in defaultKeyStatistics: price_to_book_yq             = defaultKeyStatistics['priceToBook']
+                    if 'enterpriseToRevenue'     in defaultKeyStatistics: info['enterpriseToRevenue']  = defaultKeyStatistics['enterpriseToRevenue']
+                    if 'enterpriseToEbitda'      in defaultKeyStatistics: info['enterpriseToEbitda']   = defaultKeyStatistics['enterpriseToEbitda']
+                    if 'earningsQuarterlyGrowth' in defaultKeyStatistics: earnings_quarterly_growth_yq = defaultKeyStatistics['earningsQuarterlyGrowth']
+                    if 'trailingEps'             in defaultKeyStatistics: info['trailingEps']          = defaultKeyStatistics['trailingEps']
+                    if 'forwardEps'              in defaultKeyStatistics: info['forwardEps']           = defaultKeyStatistics['forwardEps']
+
+                if summaryDetail:
+                    if 'marketCap'               in summaryDetail:        info['marketCap'] = summaryDetail['marketCap']
+
             else:
                 if isinstance(symbol, dict):
                     financials_yearly    = symbol['financials_yearly'   ] if 'financials_yearly'    in symbol else None
@@ -1727,73 +1872,29 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
             if not research_mode: print("              Exception in {} symbol.get_info(): {} -> {}".format(stock_data.symbol, e, traceback.format_exc()))
             pass
 
+        if yq_mode:
+            if quoteType and 'shortName' in quoteType and quoteType['shortName'] and quoteType['shortName'] != 'None':
+                info['shortName'] = quoteType['shortName']
+            else:
+                info['shortName'] = quoteType['longName']
+
+            info['quoteType'] = quoteType['quoteType']
+            if assetProfile:
+                if 'country' in assetProfile: info['country'] = assetProfile['country']
+
+            balance_sheets_yearly    = balance_sheets_yearly_yq
+            balance_sheets_quarterly = balance_sheets_quarterly_yq
+            cash_flows_yearly        = cash_flows_yearly_yq
+            cash_flows_quarterly     = cash_flows_quarterly_yq
+
+            earnings_yearly          = earnings_yearly_yq
+            earnings_quarterly       = earnings_quarterly_yq
+
+            financials_quarterly = financials_quarterly_yq
+            financials_yearly    = financials_yearly_yq
         if 'shortName' in info: stock_data.short_name = info['shortName']
         else:                   stock_data.short_name = 'None'
 
-        # TODO: ASAFR: In yq_mode, Convert to the following structures:
-        # "balance_sheets_yearly": {
-        #     "2021-12-31 00:00:00": {
-        #         "Total Liab": 31004000.0,
-        #         "Total Stockholder Equity": -16491000.0,
-        #         "Other Current Liab": 18539000.0,
-        #         "Total Assets": 14513000.0,
-        #         "Other Current Assets": 12584000.0,
-        #         "Retained Earnings": -50344000.0,
-        #         "Other Assets": 80000.0,
-        #         "Cash": 1570000.0,
-        #         "Total Current Liabilities": 31004000.0,
-        #         "Total Current Assets": 14252000.0,
-        #         "Net Tangible Assets": -16505000.0,
-        #         "Net Receivables": 98000.0,
-        #         "Other Liab": NaN
-        #     },
-        #     "2020-12-31 00:00:00": {
-        #         "Total Liab": 23070000.0,
-        #         "Total Stockholder Equity": -9252000.0,
-        #         "Other Current Liab": 15268000.0,
-        #         "Total Assets": 13818000.0,
-        #         "Other Current Assets": 12497000.0,
-        #         "Retained Earnings": -42747000.0,
-        #         "Other Assets": NaN,
-        #         "Cash": 418000.0,
-        #         "Total Current Liabilities": 22942000.0,
-        #         "Total Current Assets": 12976000.0,
-        #         "Net Tangible Assets": -9608000.0,
-        #         "Net Receivables": 61000.0,
-        #         "Other Liab": 52000.0
-        #     },
-        #     "2019-12-31 00:00:00": {
-        #         "Total Liab": 20080000.0,
-        #         "Total Stockholder Equity": -2894000.0,
-        #         "Other Current Liab": 13812000.0,
-        #         "Total Assets": 17186000.0,
-        #         "Other Current Assets": 12460000.0,
-        #         "Retained Earnings": -36038000.0,
-        #         "Other Assets": 680000.0,
-        #         "Cash": 433000.0,
-        #         "Total Current Liabilities": 19838000.0,
-        #         "Total Current Assets": 14922000.0,
-        #         "Net Tangible Assets": -3592000.0,
-        #         "Net Receivables": 2029000.0,
-        #         "Other Liab": 63000.0
-        #     },
-        #     "2018-12-31 00:00:00": {
-        #         "Total Liab": 21825000.0,
-        #         "Total Stockholder Equity": 3549000.0,
-        #         "Other Current Liab": 14821000.0,
-        #         "Total Assets": 25374000.0,
-        #         "Other Current Assets": 12331000.0,
-        #         "Retained Earnings": -28161000.0,
-        #         "Other Assets": NaN,
-        #         "Cash": 9856000.0,
-        #         "Total Current Liabilities": 21658000.0,
-        #         "Total Current Assets": 24358000.0,
-        #         "Net Tangible Assets": 3549000.0,
-        #         "Net Receivables": 2171000.0,
-        #         "Accounts Payable": 3910000.0,
-        #         "Other Liab": 167000.0
-        #     }
-        # },
 
         # Balance sheets listed from newest to oldest, so for the weights, must reverse the dictionary:  calculate_weighted_ratio_from_dict(dict_input,               dict_name,                          str_in_dict_numerator, str_in_dict_denominator,     weights,                stock_data, default_return_value, reverse_required, bonus_all_pos=1.0, bonus_all_neg=1.0, bonus_mon_inc=1.0, bonus_mon_dec=1.0, bonus_neg_pres=1.0, bonus_mon_inc_num=1.0, bonus_mon_inc_den=1.0, bonus_mon_dec_num=1.0, bonus_mon_dec_den=1.0):
         [stock_data.annualized_total_ratio,          stock_data.annualized_total_ratio_bonus         ] = calculate_weighted_ratio_from_dict(balance_sheets_yearly,    'annualized_total_ratio',          'Total Assets',         'Total Liab',                BALANCE_SHEETS_WEIGHTS, stock_data, 0, True, bonus_all_pos=1.0, bonus_all_neg=1.0, bonus_mon_inc=3.0, bonus_mon_dec=1.0/3.0, bonus_neg_pres=1.0, bonus_mon_inc_num=2.0, bonus_mon_inc_den=0.5, bonus_mon_dec_num=0.5, bonus_mon_dec_den=2.0)
@@ -2057,7 +2158,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
         # Financials are ordered newest to oldest so reversing is required for weights:
         [stock_data.annualized_total_revenue, stock_data.annualized_total_revenue_bonus] = calculate_weighted_stock_data_on_dict(financials_yearly,             'financials_yearly',        'Total Revenue', REVENUES_WEIGHTS, stock_data, True, bonus_all_pos=1.0, bonus_all_neg=1.0, bonus_mon_inc=4.0, bonus_mon_dec=0.25, bonus_neg_pres=1.0)
 
-        if earnings_yearly != None and 'Earnings' in earnings_yearly:
+        if earnings_yearly != None and 'Earnings' in earnings_yearly and len(list(earnings_yearly['Earnings'])):
             weight_index      = 0
             earnings_list     = []
             qeg_list          = []
@@ -2087,7 +2188,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
             stock_data.eqg_yoy             = None
             stock_data.annualized_earnings = None
 
-        if earnings_yearly != None and 'Revenue' in earnings_yearly:
+        if earnings_yearly != None and 'Revenue' in earnings_yearly and len(list(earnings_yearly['Revenue'])):
             weight_index      = 0
             qrg_list          = []
             qrg_weights_sum   = 0
@@ -2221,6 +2322,32 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
         elif stock_data.quarterized_revenue  is None and stock_data.annualized_revenue   != None: stock_data.effective_revenue  = stock_data.annualized_revenue
         else                                                                                    : stock_data.effective_revenue  = (stock_data.quarterized_revenue ) # Prefer TTM only
 
+        if yq_mode:
+            if assetProfile:
+                if 'country' in assetProfile: info['country']                 = assetProfile['country']
+
+            if summaryDetail:
+                if 'previousClose'                in summaryDetail:        info['previousClose']                = summaryDetail['previousClose']
+                if 'fiftyTwoWeekLow'              in summaryDetail:        info['fiftyTwoWeekLow']              = summaryDetail['fiftyTwoWeekLow']
+                if 'fiftyTwoWeekHigh'             in summaryDetail:        info['fiftyTwoWeekHigh']             = summaryDetail['fiftyTwoWeekHigh']
+                if 'twoHundredDayAverage'         in summaryDetail:        info['twoHundredDayAverage']         = summaryDetail['twoHundredDayAverage']
+                if 'priceToSalesTrailing12Months' in summaryDetail:        info['priceToSalesTrailing12Months'] = summaryDetail['priceToSalesTrailing12Months']
+                if 'trailingPE'                   in summaryDetail:        info['trailingPE']                   = summaryDetail['trailingPE']
+                if 'forwardPE'                    in summaryDetail:        info['forwardPE']                    = summaryDetail['forwardPE']
+
+            if defaultKeyStatistics:
+                if '52WeekChange'                 in defaultKeyStatistics: info['52WeekChange']                 = defaultKeyStatistics['52WeekChange']
+                if 'priceToBook'                  in defaultKeyStatistics: info['priceToBook']                  = defaultKeyStatistics['priceToBook']
+                if 'earningsQuarterlyGrowth'      in defaultKeyStatistics: info['earningsQuarterlyGrowth']      = defaultKeyStatistics['earningsQuarterlyGrowth']
+                if 'sharesOutstanding'            in defaultKeyStatistics: info['sharesOutstanding']            = defaultKeyStatistics['sharesOutstanding']
+                if 'pegRatio'                     in defaultKeyStatistics: info['trailingPegRatio']             = defaultKeyStatistics['pegRatio']
+
+            if financialData:
+                if 'revenueGrowth'                in financialData:        info['revenueGrowth']                = financialData['revenueGrowth']
+
+
+            # TODO: ASAFR: What about and netIncomeToCommon?
+
         if 'country' in info:                stock_data.country = info['country']
         else:                                stock_data.country = 'Unknown'
         if stock_data.country is None: stock_data.country       = 'Unknown'
@@ -2235,7 +2362,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
         if 'heldPercentInsiders' in info:                                                             stock_data.held_percent_insiders     = info['heldPercentInsiders']
         else:                                                                                         stock_data.held_percent_insiders     = PERCENT_HELD_INSIDERS_UNKNOWN
         if stock_data.held_percent_insiders     is None or stock_data.held_percent_insiders == 0:     stock_data.held_percent_insiders     = PERCENT_HELD_INSIDERS_UNKNOWN
-
+        #-v
         if 'enterpriseToRevenue' in info:
             stock_data.enterprise_value_to_revenue = info['enterpriseToRevenue']
             if stock_data.enterprise_value_to_revenue != None: stock_data.enterprise_value_to_revenue *= stock_data.summary_currency_conversion_rate_mult_to_usd # https://www.investopedia.com/terms/e/ev-revenue-multiple.asp
@@ -2256,7 +2383,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
             stock_data.market_cap = stock_data.enterprise_value
 
         # in order to calculate eibtd, take ebit from finantials and add deprecations from cash_flows to it:
-        # Financials and Cash Flows are ordered newest to oldest so reversing is required for weights:
+        #-x Financials and Cash Flows are ordered newest to oldest so reversing is required for weights:
         stock_data.quarterized_ebitd = calculate_weighted_sum_from_2_dicts(financials_quarterly, 'financials_quarterly', 'Ebit', cash_flows_quarterly, 'cash_flows_quarterly', 'Depreciation', NO_WEIGHTS,       stock_data, 0, True, True, True)
         stock_data.annualized_ebitd  = calculate_weighted_sum_from_2_dicts(financials_yearly,    'financials_yearly',    'Ebit', cash_flows_yearly,    'cash_flows_yearly',    'Depreciation', EARNINGS_WEIGHTS, stock_data, 0, True, True)
         stock_data.ebitd             = (stock_data.quarterized_ebitd) # Prefer TTM only
@@ -2266,7 +2393,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
         #              1.2. There is a similar field (same value different name) besides ebit - see if it is always the same? Low priority
         #              1.3. If enterpriseToEbitda is available (for most stocks it is? Check), then EBITDA = EV/enterpriseToEbitda
         #              1.3.1. But if EV is negative for some stocks... then Market Capital might be used...
-        #              1.4. Suggestion: take average such that EBITDA = (EV/enterpriseToEbitda + CalculatedEbitFromFinancialsAndCashFlows)/2
+        #-x            1.4. Suggestion: take average such that EBITDA = (EV/enterpriseToEbitda + CalculatedEbitFromFinancialsAndCashFlows)/2
         if 'enterpriseToEbitda' in info:
             stock_data.enterprise_value_to_ebitda = info['enterpriseToEbitda']
             if stock_data.enterprise_value_to_ebitda != None:
@@ -2285,14 +2412,17 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
 
         if 'trailingPE' in info:
             stock_data.trailing_price_to_earnings  = info['trailingPE']  # https://www.investopedia.com/terms/t/trailingpe.asp
-            if tase_mode and stock_data.trailing_price_to_earnings != None:
+            if tase_mode and stock_data.trailing_price_to_earnings != None and not isinstance(stock_data.trailing_price_to_earnings, str):
                 stock_data.trailing_price_to_earnings /= 100.0  # In TLV stocks, yfinance multiplies trailingPE by a factor of 100, so compensate
                 if stock_data.symbol in g_symbols_tase_duals:  # TODO: ASAFR: Do research and add this condition to all relevant cases in other fundamental parameters
                     stock_data.trailing_price_to_earnings *= stock_data.summary_currency_conversion_rate_mult_to_usd # Additionally, in TLV DUAL stocks this ratio is mistakenly calculated using PriceInNis/EarningsInUSD -> so Compensate
+            else:
+                stock_data.trailing_price_to_earnings = MAX_UNKNOWN_PE
         elif stock_data.effective_earnings != None and stock_data.effective_earnings != 0 and stock_data.market_cap != None:
             stock_data.trailing_price_to_earnings = float(stock_data.market_cap)       / float(stock_data.effective_earnings) # Calculate manually.
         elif stock_data.effective_net_income != None and stock_data.effective_net_income != 0 and stock_data.enterprise_value != None:
             stock_data.trailing_price_to_earnings = float(stock_data.enterprise_value) / float(stock_data.effective_net_income)  # Calculate manually.
+        #-x
         if isinstance(stock_data.trailing_price_to_earnings,str):  stock_data.trailing_price_to_earnings  = MAX_UNKNOWN_PE # Mark as None, so as to try and calculate manually.
 
         if 'forwardPE' in info:
@@ -2317,7 +2447,7 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
             if   stock_data.forward_price_to_earnings   < 0: stock_data.forward_price_to_earnings  = -NEGATIVE_EARNINGS_FACTOR/float(stock_data.forward_price_to_earnings)
             elif stock_data.forward_price_to_earnings  == 0: stock_data.forward_price_to_earnings  =  NEGATIVE_EARNINGS_FACTOR
 
-        # Calculate the weighted average of the forward and trailing P/E:
+        #-x Calculate the weighted average of the forward and trailing P/E:
         if (stock_data.trailing_price_to_earnings != None and stock_data.forward_price_to_earnings != None):
             stock_data.effective_price_to_earnings = (stock_data.trailing_price_to_earnings*TRAILING_PRICE_TO_EARNINGS_WEIGHT+stock_data.forward_price_to_earnings*FORWARD_PRICE_TO_EARNINGS_WEIGHT)
 
@@ -2577,30 +2707,31 @@ def process_info(yq_mode, json_db, symbol, stock_data, tase_mode, sectors_list, 
         try:  # It is important to note that: 1. latest value is in index 0. 2. For the actual value in USD, need to translate the date of the dividend to the value of share at that time, because the dividends[] are pare share
             # if sss_config.custom_sss_value_equation:
             #     dividends =
-            if isinstance(symbol, dict):
-                dividends = symbol['dividends'] if 'dividends' in symbol else None
-            else:
-                dividends = symbol.get_dividends()
+            if not yq_mode:
+                if isinstance(symbol, dict):
+                    dividends = symbol['dividends'] if 'dividends' in symbol else None
+                else:
+                    dividends = symbol.get_dividends()
 
-            last_dividends_list = []
-            if len(dividends) > 0:
-                last_4_dividends = dividends[-1:]
-                stock_data.last_dividend_0 = last_4_dividends[-1] # Latest
-                last_dividends_list.insert(0, stock_data.last_dividend_0)
-            if len(dividends) > 1:
-                last_4_dividends = dividends[-2:]
-                stock_data.last_dividend_1 = last_4_dividends[-2] # One before latest
-                last_dividends_list.insert(0, stock_data.last_dividend_1)
-            if len(dividends) > 2:
-                last_4_dividends = dividends[-3:]
-                stock_data.last_dividend_2 = last_4_dividends[-3] # 2 before latest, etc
-                last_dividends_list.insert(0, stock_data.last_dividend_2)
-            if len(dividends) > 3:
-                last_4_dividends = dividends[-4:]
-                stock_data.last_dividend_3 = last_4_dividends[-4]
-                last_dividends_list.insert(0, stock_data.last_dividend_3)
+                last_dividends_list = []
+                if len(dividends) > 0:
+                    last_4_dividends = dividends[-1:]
+                    stock_data.last_dividend_0 = last_4_dividends[-1] # Latest
+                    last_dividends_list.insert(0, stock_data.last_dividend_0)
+                if len(dividends) > 1:
+                    last_4_dividends = dividends[-2:]
+                    stock_data.last_dividend_1 = last_4_dividends[-2] # One before latest
+                    last_dividends_list.insert(0, stock_data.last_dividend_1)
+                if len(dividends) > 2:
+                    last_4_dividends = dividends[-3:]
+                    stock_data.last_dividend_2 = last_4_dividends[-3] # 2 before latest, etc
+                    last_dividends_list.insert(0, stock_data.last_dividend_2)
+                if len(dividends) > 3:
+                    last_4_dividends = dividends[-4:]
+                    stock_data.last_dividend_3 = last_4_dividends[-4]
+                    last_dividends_list.insert(0, stock_data.last_dividend_3)
 
-            if last_dividends_list != None: json_db[stock_data.symbol]["dividends"] = last_dividends_list
+                if last_dividends_list != None: json_db[stock_data.symbol]["dividends"] = last_dividends_list
 
         except Exception as e:
             # if not multi_dim_scan_mode: print("Exception in symbol.dividends: {} -> {}".format(e, traceback.format_exc()))
@@ -2824,7 +2955,7 @@ def perform_scan_close_values_days(reference_raw_data, reference_download_data, 
                             symbol_data['Close'  ].iloc[-2] > symbol_data['MA21exp'].iloc[-2] and \
                             symbol_data['Close'  ].iloc[-3] > symbol_data['MA21exp'].iloc[-3] and \
                             date_and_time_crash_and_continue:
-                        print('[perform_scan_close_values_days] processing rising {:11} ({:40}). total_free_mem_mb={}'.format(symbol, symbol_name, total_free_mem_mb))
+                        print('[perform_scan_close_values_days] processing rising {:11} ({:40}). ({:4}/{:4} [{:2.2f%]) total_free_mem_mb={:5}'.format(symbol, symbol_name, len(rising_symbols)+1, len(symbols), 100*(len(rising_symbols)+1)/(len(symbols)), total_free_mem_mb))
                         append_ma_data(date_and_time_crash_and_continue=date_and_time_crash_and_continue, group_type='rising', group_symbols=rising_symbols, group_type_rows=rising_rows, symbol=symbol, symbol_name=symbol_name, symbol_data=symbol_data, scan_close_values_interval=scan_close_values_interval)
                 else:
                     if      symbol_data['MA21exp'][-1] > symbol_data['MA21exp'][-2] > symbol_data['MA21exp'][-3] and \
@@ -2840,7 +2971,7 @@ def perform_scan_close_values_days(reference_raw_data, reference_download_data, 
                             symbol_data['Close'  ][-2] > symbol_data['MA21exp'][-2] and \
                             symbol_data['Close'  ][-3] > symbol_data['MA21exp'][-3] and \
                             date_and_time_crash_and_continue:
-                        print('[perform_scan_close_values_days] processing rising {:11} ({:40}). total_free_mem_mb = {}'.format(symbol, symbol_name, total_free_mem_mb))
+                        print('[perform_scan_close_values_days] processing rising {:11} ({:40}). ({:4}/{:4} [{:2.2f}%]) total_free_mem_mb = {:5}'.format(symbol, symbol_name, len(rising_symbols) + 1, len(symbols),100 * (len(rising_symbols) + 1) / (len(symbols)), total_free_mem_mb))
                         append_ma_data(date_and_time_crash_and_continue=date_and_time_crash_and_continue, group_type='rising', group_symbols=rising_symbols, group_type_rows=rising_rows, symbol=symbol, symbol_name=symbol_name, symbol_data=symbol_data, scan_close_values_interval=scan_close_values_interval)
                     # TODO: ASAFR: 1. Return the falling now with swap memory management working well!
                     #              2. Add Lower Level Rising not requiering 21exp to be rising!
@@ -3099,7 +3230,7 @@ def process_symbols(yq_mode, symbol_to_name_dict, crash_and_continue_raw_data, d
                     else:
                         row[fix_row_index] = 0
             stock_data = get_stock_data_normalized_from_db_row_compact(row, symbol) if "normalized" in db_filename else get_stock_data_from_db_row_compact(row, symbol)
-            if not process_info(json_db=None, symbol=symbol, stock_data=stock_data, tase_mode=tase_mode, sectors_list=sectors_list, sectors_filter_out=sectors_filter_out, countries_list=countries_list, countries_filter_out=countries_filter_out, profit_margin_limit=profit_margin_limit, pb_limit=pb_limit, pi_limit=pi_limit, enterprise_value_millions_usd_limit=enterprise_value_millions_usd_limit, research_mode_max_ev=research_mode_max_ev, ev_to_cfo_ratio_limit=ev_to_cfo_ratio_limit, debt_to_equity_limit=debt_to_equity_limit, eqg_min=eqg_min, rqg_min=rqg_min, price_to_earnings_limit=price_to_earnings_limit, enterprise_value_to_revenue_limit=enterprise_value_to_revenue_limit, favor_sectors=favor_sectors, favor_sectors_by=favor_sectors_by, research_mode=research_mode, currency_conversion_tool=currency_conversion_tool, currency_conversion_tool_alternative=currency_conversion_tool_alternative, currency_conversion_tool_manual=currency_conversion_tool_manual, reference_db=reference_db, reference_db_title_row=reference_db_title_row, db_filename=db_filename):
+            if not process_info(yq_mode=False, json_db=None, symbol=symbol, stock_data=stock_data, tase_mode=tase_mode, sectors_list=sectors_list, sectors_filter_out=sectors_filter_out, countries_list=countries_list, countries_filter_out=countries_filter_out, profit_margin_limit=profit_margin_limit, pb_limit=pb_limit, pi_limit=pi_limit, enterprise_value_millions_usd_limit=enterprise_value_millions_usd_limit, research_mode_max_ev=research_mode_max_ev, ev_to_cfo_ratio_limit=ev_to_cfo_ratio_limit, debt_to_equity_limit=debt_to_equity_limit, eqg_min=eqg_min, rqg_min=rqg_min, price_to_earnings_limit=price_to_earnings_limit, enterprise_value_to_revenue_limit=enterprise_value_to_revenue_limit, favor_sectors=favor_sectors, favor_sectors_by=favor_sectors_by, research_mode=research_mode, currency_conversion_tool=currency_conversion_tool, currency_conversion_tool_alternative=currency_conversion_tool_alternative, currency_conversion_tool_manual=currency_conversion_tool_manual, reference_db=reference_db, reference_db_title_row=reference_db_title_row, db_filename=db_filename):
                 if research_mode: continue
 
             dividends_sum = stock_data.last_dividend_0 + stock_data.last_dividend_1 + stock_data.last_dividend_2 + stock_data.last_dividend_3
